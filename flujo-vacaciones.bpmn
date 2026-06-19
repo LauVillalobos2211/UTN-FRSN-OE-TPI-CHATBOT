@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  id="Definitions_FlujoVacaciones"
+                  targetNamespace="https://utn-tpi/vacaciones">
+  <bpmn:process id="ProcesoGestionVacacionesTelegram" name="Gestion de Vacaciones por Telegram" isExecutable="false">
+    <bpmn:documentation>
+      Modelo BPMN 2.0 del flujo completo implementado en el proyecto.
+      La aprobacion/rechazo no esta automatizada en el bot: queda como accion manual externa sobre el CSV.
+    </bpmn:documentation>
+
+    <bpmn:startEvent id="Start_App" name="Iniciar aplicacion" />
+    <bpmn:task id="Task_InitCSVs" name="Inicializar CSVs y datos base" />
+    <bpmn:userTask id="Task_IngresarToken" name="Ingresar token del bot en consola" />
+    <bpmn:exclusiveGateway id="Gateway_TokenValido" name="Token informado?" />
+    <bpmn:endEvent id="End_SinToken" name="Cerrar programa por token vacio" />
+    <bpmn:task id="Task_CargarUsuarios" name="Leer usuarios y calcular saldos" />
+    <bpmn:userTask id="Task_SeleccionarEmpleadoConsola" name="Seleccionar empleado desde consola" />
+    <bpmn:exclusiveGateway id="Gateway_EmpleadoConsolaValido" name="Empleado valido?" />
+    <bpmn:task id="Task_AvisarSeleccionInvalida" name="Informar seleccion invalida y reintentar" />
+    <bpmn:serviceTask id="Task_IniciarBot" name="Crear Application de Telegram e iniciar polling" />
+    <bpmn:userTask id="Task_EnviarStart" name="Empleado abre Telegram y envia /start" />
+
+    <bpmn:subProcess id="SubProcess_SesionMenu" name="Gestion de sesion y menu principal">
+      <bpmn:startEvent id="Start_Sesion" name="Iniciar sesion" />
+      <bpmn:exclusiveGateway id="Gateway_HayEmpleadoConsola" name="Hay empleado preseleccionado en consola?" />
+      <bpmn:task id="Task_AsignarEmpleadoConsola" name="Asignar empleado de consola a la sesion" />
+      <bpmn:task id="Task_MostrarListaTelegram" name="Mostrar lista de empleados en Telegram" />
+      <bpmn:userTask id="Task_SeleccionarEmpleadoTelegram" name="Seleccionar empleado en Telegram" />
+      <bpmn:exclusiveGateway id="Gateway_EmpleadoTelegramValido" name="Seleccion valida?" />
+      <bpmn:task id="Task_RepetirListaTelegram" name="Repetir lista de empleados con aviso" />
+      <bpmn:task id="Task_MostrarMenu" name="Mostrar menu principal y saldo de dias" />
+      <bpmn:exclusiveGateway id="Gateway_OpcionMenu" name="Opcion elegida" />
+      <bpmn:subProcess id="SubProcess_SolicitarVacaciones" name="Solicitar vacaciones">
+        <bpmn:startEvent id="Start_Solicitar" name="Iniciar solicitud" />
+        <bpmn:userTask id="Task_IngresarFechaInicio" name="Ingresar fecha de inicio" />
+        <bpmn:exclusiveGateway id="Gateway_FechaInicioFormato" name="Formato de inicio valido?" />
+        <bpmn:task id="Task_ErrorFormatoInicio" name="Informar formato invalido de inicio" />
+        <bpmn:exclusiveGateway id="Gateway_FechaInicioPasado" name="Inicio es hoy o futuro?" />
+        <bpmn:task id="Task_ErrorInicioPasado" name="Informar que la fecha no puede ser pasada" />
+        <bpmn:userTask id="Task_IngresarFechaFin" name="Ingresar fecha de fin" />
+        <bpmn:exclusiveGateway id="Gateway_FechaFinFormato" name="Formato de fin valido?" />
+        <bpmn:task id="Task_ErrorFormatoFin" name="Informar formato invalido de fin" />
+        <bpmn:exclusiveGateway id="Gateway_FinMayorInicio" name="Fin es igual o posterior al inicio?" />
+        <bpmn:task id="Task_ErrorFinMenorInicio" name="Informar inconsistencia entre inicio y fin" />
+        <bpmn:task id="Task_CalcularDiasHabiles" name="Calcular dias habiles del periodo" />
+        <bpmn:exclusiveGateway id="Gateway_HayDiasHabiles" name="Hay dias habiles?" />
+        <bpmn:task id="Task_ErrorSinHabiles" name="Informar que el rango no tiene dias habiles" />
+        <bpmn:task id="Task_CalcularDisponibles" name="Calcular dias disponibles del empleado" />
+        <bpmn:exclusiveGateway id="Gateway_AlcanzaSaldo" name="Dias disponibles suficientes?" />
+        <bpmn:task id="Task_ErrorSaldoInsuficiente" name="Informar saldo insuficiente" />
+        <bpmn:task id="Task_MostrarResumenSolicitud" name="Mostrar resumen y saldo restante" />
+        <bpmn:userTask id="Task_ConfirmarSolicitud" name="Confirmar solicitud" />
+        <bpmn:exclusiveGateway id="Gateway_ConfirmaSolicitud" name="Confirma?" />
+        <bpmn:task id="Task_GuardarSolicitudPendiente" name="Guardar solicitud en vacaciones.csv y solicitudes.csv con estado pendiente" />
+        <bpmn:task id="Task_InformarPendiente" name="Informar numero de solicitud y estado pendiente" />
+        <bpmn:endEvent id="End_SolicitudRegistrada" name="Solicitud registrada" />
+        <bpmn:endEvent id="End_SolicitudDescartada" name="Solicitud descartada" />
+
+        <bpmn:sequenceFlow id="SF_Sol_1" sourceRef="Start_Solicitar" targetRef="Task_IngresarFechaInicio" />
+        <bpmn:sequenceFlow id="SF_Sol_2" sourceRef="Task_IngresarFechaInicio" targetRef="Gateway_FechaInicioFormato" />
+        <bpmn:sequenceFlow id="SF_Sol_3" sourceRef="Gateway_FechaInicioFormato" targetRef="Task_ErrorFormatoInicio" name="No" />
+        <bpmn:sequenceFlow id="SF_Sol_4" sourceRef="Task_ErrorFormatoInicio" targetRef="Task_IngresarFechaInicio" />
+        <bpmn:sequenceFlow id="SF_Sol_5" sourceRef="Gateway_FechaInicioFormato" targetRef="Gateway_FechaInicioPasado" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_6" sourceRef="Gateway_FechaInicioPasado" targetRef="Task_ErrorInicioPasado" name="No" />
+        <bpmn:sequenceFlow id="SF_Sol_7" sourceRef="Task_ErrorInicioPasado" targetRef="Task_IngresarFechaInicio" />
+        <bpmn:sequenceFlow id="SF_Sol_8" sourceRef="Gateway_FechaInicioPasado" targetRef="Task_IngresarFechaFin" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_9" sourceRef="Task_IngresarFechaFin" targetRef="Gateway_FechaFinFormato" />
+        <bpmn:sequenceFlow id="SF_Sol_10" sourceRef="Gateway_FechaFinFormato" targetRef="Task_ErrorFormatoFin" name="No" />
+        <bpmn:sequenceFlow id="SF_Sol_11" sourceRef="Task_ErrorFormatoFin" targetRef="Task_IngresarFechaFin" />
+        <bpmn:sequenceFlow id="SF_Sol_12" sourceRef="Gateway_FechaFinFormato" targetRef="Gateway_FinMayorInicio" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_13" sourceRef="Gateway_FinMayorInicio" targetRef="Task_ErrorFinMenorInicio" name="No" />
+        <bpmn:sequenceFlow id="SF_Sol_14" sourceRef="Task_ErrorFinMenorInicio" targetRef="Task_IngresarFechaFin" />
+        <bpmn:sequenceFlow id="SF_Sol_15" sourceRef="Gateway_FinMayorInicio" targetRef="Task_CalcularDiasHabiles" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_16" sourceRef="Task_CalcularDiasHabiles" targetRef="Gateway_HayDiasHabiles" />
+        <bpmn:sequenceFlow id="SF_Sol_17" sourceRef="Gateway_HayDiasHabiles" targetRef="Task_ErrorSinHabiles" name="No" />
+        <bpmn:sequenceFlow id="SF_Sol_18" sourceRef="Task_ErrorSinHabiles" targetRef="Task_IngresarFechaFin" />
+        <bpmn:sequenceFlow id="SF_Sol_19" sourceRef="Gateway_HayDiasHabiles" targetRef="Task_CalcularDisponibles" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_20" sourceRef="Task_CalcularDisponibles" targetRef="Gateway_AlcanzaSaldo" />
+        <bpmn:sequenceFlow id="SF_Sol_21" sourceRef="Gateway_AlcanzaSaldo" targetRef="Task_ErrorSaldoInsuficiente" name="No" />
+        <bpmn:sequenceFlow id="SF_Sol_22" sourceRef="Task_ErrorSaldoInsuficiente" targetRef="Task_IngresarFechaFin" />
+        <bpmn:sequenceFlow id="SF_Sol_23" sourceRef="Gateway_AlcanzaSaldo" targetRef="Task_MostrarResumenSolicitud" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_24" sourceRef="Task_MostrarResumenSolicitud" targetRef="Task_ConfirmarSolicitud" />
+        <bpmn:sequenceFlow id="SF_Sol_25" sourceRef="Task_ConfirmarSolicitud" targetRef="Gateway_ConfirmaSolicitud" />
+        <bpmn:sequenceFlow id="SF_Sol_26" sourceRef="Gateway_ConfirmaSolicitud" targetRef="Task_GuardarSolicitudPendiente" name="Si" />
+        <bpmn:sequenceFlow id="SF_Sol_27" sourceRef="Task_GuardarSolicitudPendiente" targetRef="Task_InformarPendiente" />
+        <bpmn:sequenceFlow id="SF_Sol_28" sourceRef="Task_InformarPendiente" targetRef="End_SolicitudRegistrada" />
+        <bpmn:sequenceFlow id="SF_Sol_29" sourceRef="Gateway_ConfirmaSolicitud" targetRef="End_SolicitudDescartada" name="No" />
+      </bpmn:subProcess>
+
+      <bpmn:task id="Task_VerSolicitudes" name="Listar solicitudes del empleado y sus estados" />
+      <bpmn:subProcess id="SubProcess_ModificarSolicitud" name="Modificar solicitud pendiente">
+        <bpmn:startEvent id="Start_Modificar" name="Iniciar modificacion" />
+        <bpmn:task id="Task_ListarPendientes" name="Listar solicitudes pendientes" />
+        <bpmn:exclusiveGateway id="Gateway_HayPendientes" name="Hay pendientes para modificar?" />
+        <bpmn:endEvent id="End_SinPendientesModificar" name="Sin solicitudes pendientes" />
+        <bpmn:userTask id="Task_SeleccionarPendiente" name="Seleccionar solicitud pendiente" />
+        <bpmn:exclusiveGateway id="Gateway_PendienteValida" name="Solicitud pendiente valida?" />
+        <bpmn:task id="Task_ErrorPendienteInvalida" name="Informar solicitud invalida" />
+        <bpmn:userTask id="Task_ModIngresarInicio" name="Ingresar nueva fecha de inicio" />
+        <bpmn:exclusiveGateway id="Gateway_ModInicioFormato" name="Formato de inicio valido?" />
+        <bpmn:task id="Task_ModErrorFormatoInicio" name="Informar formato invalido de inicio" />
+        <bpmn:exclusiveGateway id="Gateway_ModInicioPasado" name="Inicio es hoy o futuro?" />
+        <bpmn:task id="Task_ModErrorInicioPasado" name="Informar fecha pasada" />
+        <bpmn:userTask id="Task_ModIngresarFin" name="Ingresar nueva fecha de fin" />
+        <bpmn:exclusiveGateway id="Gateway_ModFinFormato" name="Formato de fin valido?" />
+        <bpmn:task id="Task_ModErrorFormatoFin" name="Informar formato invalido de fin" />
+        <bpmn:exclusiveGateway id="Gateway_ModFinMayorInicio" name="Fin es igual o posterior al inicio?" />
+        <bpmn:task id="Task_ModErrorFinMenorInicio" name="Informar inconsistencia entre inicio y fin" />
+        <bpmn:task id="Task_ModCalcularHabiles" name="Calcular dias habiles del nuevo periodo" />
+        <bpmn:exclusiveGateway id="Gateway_ModHayHabiles" name="Hay dias habiles?" />
+        <bpmn:task id="Task_ModErrorSinHabiles" name="Informar rango sin dias habiles" />
+        <bpmn:task id="Task_ModCalcularDisponibles" name="Calcular saldo disponible" />
+        <bpmn:exclusiveGateway id="Gateway_ModSaldoSuficiente" name="Saldo suficiente?" />
+        <bpmn:task id="Task_ModErrorSaldo" name="Informar saldo insuficiente" />
+        <bpmn:task id="Task_ModMostrarResumen" name="Mostrar resumen de la modificacion" />
+        <bpmn:userTask id="Task_ModConfirmar" name="Confirmar modificacion" />
+        <bpmn:exclusiveGateway id="Gateway_ModConfirma" name="Confirma?" />
+        <bpmn:task id="Task_ModGuardarCambios" name="Actualizar fechas y dias en vacaciones.csv" />
+        <bpmn:endEvent id="End_ModificacionAplicada" name="Modificacion aplicada" />
+        <bpmn:endEvent id="End_ModificacionDescartada" name="Modificacion descartada" />
+
+        <bpmn:sequenceFlow id="SF_Mod_1" sourceRef="Start_Modificar" targetRef="Task_ListarPendientes" />
+        <bpmn:sequenceFlow id="SF_Mod_2" sourceRef="Task_ListarPendientes" targetRef="Gateway_HayPendientes" />
+        <bpmn:sequenceFlow id="SF_Mod_3" sourceRef="Gateway_HayPendientes" targetRef="End_SinPendientesModificar" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_4" sourceRef="Gateway_HayPendientes" targetRef="Task_SeleccionarPendiente" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_5" sourceRef="Task_SeleccionarPendiente" targetRef="Gateway_PendienteValida" />
+        <bpmn:sequenceFlow id="SF_Mod_6" sourceRef="Gateway_PendienteValida" targetRef="Task_ErrorPendienteInvalida" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_7" sourceRef="Task_ErrorPendienteInvalida" targetRef="Task_SeleccionarPendiente" />
+        <bpmn:sequenceFlow id="SF_Mod_8" sourceRef="Gateway_PendienteValida" targetRef="Task_ModIngresarInicio" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_9" sourceRef="Task_ModIngresarInicio" targetRef="Gateway_ModInicioFormato" />
+        <bpmn:sequenceFlow id="SF_Mod_10" sourceRef="Gateway_ModInicioFormato" targetRef="Task_ModErrorFormatoInicio" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_11" sourceRef="Task_ModErrorFormatoInicio" targetRef="Task_ModIngresarInicio" />
+        <bpmn:sequenceFlow id="SF_Mod_12" sourceRef="Gateway_ModInicioFormato" targetRef="Gateway_ModInicioPasado" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_13" sourceRef="Gateway_ModInicioPasado" targetRef="Task_ModErrorInicioPasado" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_14" sourceRef="Task_ModErrorInicioPasado" targetRef="Task_ModIngresarInicio" />
+        <bpmn:sequenceFlow id="SF_Mod_15" sourceRef="Gateway_ModInicioPasado" targetRef="Task_ModIngresarFin" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_16" sourceRef="Task_ModIngresarFin" targetRef="Gateway_ModFinFormato" />
+        <bpmn:sequenceFlow id="SF_Mod_17" sourceRef="Gateway_ModFinFormato" targetRef="Task_ModErrorFormatoFin" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_18" sourceRef="Task_ModErrorFormatoFin" targetRef="Task_ModIngresarFin" />
+        <bpmn:sequenceFlow id="SF_Mod_19" sourceRef="Gateway_ModFinFormato" targetRef="Gateway_ModFinMayorInicio" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_20" sourceRef="Gateway_ModFinMayorInicio" targetRef="Task_ModErrorFinMenorInicio" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_21" sourceRef="Task_ModErrorFinMenorInicio" targetRef="Task_ModIngresarFin" />
+        <bpmn:sequenceFlow id="SF_Mod_22" sourceRef="Gateway_ModFinMayorInicio" targetRef="Task_ModCalcularHabiles" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_23" sourceRef="Task_ModCalcularHabiles" targetRef="Gateway_ModHayHabiles" />
+        <bpmn:sequenceFlow id="SF_Mod_24" sourceRef="Gateway_ModHayHabiles" targetRef="Task_ModErrorSinHabiles" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_25" sourceRef="Task_ModErrorSinHabiles" targetRef="Task_ModIngresarFin" />
+        <bpmn:sequenceFlow id="SF_Mod_26" sourceRef="Gateway_ModHayHabiles" targetRef="Task_ModCalcularDisponibles" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_27" sourceRef="Task_ModCalcularDisponibles" targetRef="Gateway_ModSaldoSuficiente" />
+        <bpmn:sequenceFlow id="SF_Mod_28" sourceRef="Gateway_ModSaldoSuficiente" targetRef="Task_ModErrorSaldo" name="No" />
+        <bpmn:sequenceFlow id="SF_Mod_29" sourceRef="Task_ModErrorSaldo" targetRef="Task_ModIngresarFin" />
+        <bpmn:sequenceFlow id="SF_Mod_30" sourceRef="Gateway_ModSaldoSuficiente" targetRef="Task_ModMostrarResumen" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_31" sourceRef="Task_ModMostrarResumen" targetRef="Task_ModConfirmar" />
+        <bpmn:sequenceFlow id="SF_Mod_32" sourceRef="Task_ModConfirmar" targetRef="Gateway_ModConfirma" />
+        <bpmn:sequenceFlow id="SF_Mod_33" sourceRef="Gateway_ModConfirma" targetRef="Task_ModGuardarCambios" name="Si" />
+        <bpmn:sequenceFlow id="SF_Mod_34" sourceRef="Task_ModGuardarCambios" targetRef="End_ModificacionAplicada" />
+        <bpmn:sequenceFlow id="SF_Mod_35" sourceRef="Gateway_ModConfirma" targetRef="End_ModificacionDescartada" name="No" />
+      </bpmn:subProcess>
+
+      <bpmn:subProcess id="SubProcess_CancelarSolicitud" name="Cancelar solicitud activa">
+        <bpmn:startEvent id="Start_Cancelar" name="Iniciar cancelacion" />
+        <bpmn:task id="Task_ListarActivas" name="Listar solicitudes activas pendientes o aprobadas" />
+        <bpmn:exclusiveGateway id="Gateway_HayActivas" name="Hay solicitudes activas?" />
+        <bpmn:endEvent id="End_SinActivasCancelar" name="Sin solicitudes activas" />
+        <bpmn:userTask id="Task_SeleccionarActiva" name="Seleccionar solicitud a cancelar" />
+        <bpmn:exclusiveGateway id="Gateway_ActivaValida" name="Solicitud activa valida?" />
+        <bpmn:task id="Task_ErrorActivaInvalida" name="Informar solicitud invalida" />
+        <bpmn:task id="Task_MostrarResumenCancelacion" name="Mostrar detalle y pedir confirmacion" />
+        <bpmn:userTask id="Task_ConfirmarCancelacion" name="Confirmar cancelacion" />
+        <bpmn:exclusiveGateway id="Gateway_ConfirmaCancelacion" name="Confirma?" />
+        <bpmn:task id="Task_MarcarCancelada" name="Actualizar estado a cancelada y guardar observacion" />
+        <bpmn:endEvent id="End_CancelacionAplicada" name="Cancelacion aplicada" />
+        <bpmn:endEvent id="End_CancelacionAbortada" name="Cancelacion abortada" />
+
+        <bpmn:sequenceFlow id="SF_Can_1" sourceRef="Start_Cancelar" targetRef="Task_ListarActivas" />
+        <bpmn:sequenceFlow id="SF_Can_2" sourceRef="Task_ListarActivas" targetRef="Gateway_HayActivas" />
+        <bpmn:sequenceFlow id="SF_Can_3" sourceRef="Gateway_HayActivas" targetRef="End_SinActivasCancelar" name="No" />
+        <bpmn:sequenceFlow id="SF_Can_4" sourceRef="Gateway_HayActivas" targetRef="Task_SeleccionarActiva" name="Si" />
+        <bpmn:sequenceFlow id="SF_Can_5" sourceRef="Task_SeleccionarActiva" targetRef="Gateway_ActivaValida" />
+        <bpmn:sequenceFlow id="SF_Can_6" sourceRef="Gateway_ActivaValida" targetRef="Task_ErrorActivaInvalida" name="No" />
+        <bpmn:sequenceFlow id="SF_Can_7" sourceRef="Task_ErrorActivaInvalida" targetRef="Task_SeleccionarActiva" />
+        <bpmn:sequenceFlow id="SF_Can_8" sourceRef="Gateway_ActivaValida" targetRef="Task_MostrarResumenCancelacion" name="Si" />
+        <bpmn:sequenceFlow id="SF_Can_9" sourceRef="Task_MostrarResumenCancelacion" targetRef="Task_ConfirmarCancelacion" />
+        <bpmn:sequenceFlow id="SF_Can_10" sourceRef="Task_ConfirmarCancelacion" targetRef="Gateway_ConfirmaCancelacion" />
+        <bpmn:sequenceFlow id="SF_Can_11" sourceRef="Gateway_ConfirmaCancelacion" targetRef="Task_MarcarCancelada" name="Si" />
+        <bpmn:sequenceFlow id="SF_Can_12" sourceRef="Task_MarcarCancelada" targetRef="End_CancelacionAplicada" />
+        <bpmn:sequenceFlow id="SF_Can_13" sourceRef="Gateway_ConfirmaCancelacion" targetRef="End_CancelacionAbortada" name="No" />
+      </bpmn:subProcess>
+
+      <bpmn:task id="Task_MostrarDiasDisponibles" name="Mostrar dias anuales, tomados, programados y disponibles" />
+      <bpmn:task id="Task_CerrarSesion" name="Limpiar sesion y mostrar mensaje de salida" />
+      <bpmn:endEvent id="End_Sesion" name="Sesion finalizada" />
+
+      <bpmn:sequenceFlow id="SF_Ses_1" sourceRef="Start_Sesion" targetRef="Gateway_HayEmpleadoConsola" />
+      <bpmn:sequenceFlow id="SF_Ses_2" sourceRef="Gateway_HayEmpleadoConsola" targetRef="Task_AsignarEmpleadoConsola" name="Si" />
+      <bpmn:sequenceFlow id="SF_Ses_3" sourceRef="Task_AsignarEmpleadoConsola" targetRef="Task_MostrarMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_4" sourceRef="Gateway_HayEmpleadoConsola" targetRef="Task_MostrarListaTelegram" name="No" />
+      <bpmn:sequenceFlow id="SF_Ses_5" sourceRef="Task_MostrarListaTelegram" targetRef="Task_SeleccionarEmpleadoTelegram" />
+      <bpmn:sequenceFlow id="SF_Ses_6" sourceRef="Task_SeleccionarEmpleadoTelegram" targetRef="Gateway_EmpleadoTelegramValido" />
+      <bpmn:sequenceFlow id="SF_Ses_7" sourceRef="Gateway_EmpleadoTelegramValido" targetRef="Task_RepetirListaTelegram" name="No" />
+      <bpmn:sequenceFlow id="SF_Ses_8" sourceRef="Task_RepetirListaTelegram" targetRef="Task_SeleccionarEmpleadoTelegram" />
+      <bpmn:sequenceFlow id="SF_Ses_9" sourceRef="Gateway_EmpleadoTelegramValido" targetRef="Task_MostrarMenu" name="Si" />
+      <bpmn:sequenceFlow id="SF_Ses_10" sourceRef="Task_MostrarMenu" targetRef="Gateway_OpcionMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_11" sourceRef="Gateway_OpcionMenu" targetRef="SubProcess_SolicitarVacaciones" name="Solicitar vacaciones" />
+      <bpmn:sequenceFlow id="SF_Ses_12" sourceRef="SubProcess_SolicitarVacaciones" targetRef="Task_MostrarMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_13" sourceRef="Gateway_OpcionMenu" targetRef="Task_VerSolicitudes" name="Ver solicitudes" />
+      <bpmn:sequenceFlow id="SF_Ses_14" sourceRef="Task_VerSolicitudes" targetRef="Task_MostrarMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_15" sourceRef="Gateway_OpcionMenu" targetRef="SubProcess_ModificarSolicitud" name="Modificar solicitud" />
+      <bpmn:sequenceFlow id="SF_Ses_16" sourceRef="SubProcess_ModificarSolicitud" targetRef="Task_MostrarMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_17" sourceRef="Gateway_OpcionMenu" targetRef="SubProcess_CancelarSolicitud" name="Cancelar solicitud" />
+      <bpmn:sequenceFlow id="SF_Ses_18" sourceRef="SubProcess_CancelarSolicitud" targetRef="Task_MostrarMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_19" sourceRef="Gateway_OpcionMenu" targetRef="Task_MostrarDiasDisponibles" name="Dias disponibles" />
+      <bpmn:sequenceFlow id="SF_Ses_20" sourceRef="Task_MostrarDiasDisponibles" targetRef="Task_MostrarMenu" />
+      <bpmn:sequenceFlow id="SF_Ses_21" sourceRef="Gateway_OpcionMenu" targetRef="Task_CerrarSesion" name="Salir" />
+      <bpmn:sequenceFlow id="SF_Ses_22" sourceRef="Task_CerrarSesion" targetRef="End_Sesion" />
+    </bpmn:subProcess>
+
+    <bpmn:endEvent id="End_AplicacionActiva" name="Bot en ejecucion o sesion cerrada" />
+
+    <bpmn:textAnnotation id="Text_ManualApproval">
+      <bpmn:text>Las solicitudes nuevas quedan en estado pendiente. La aprobacion o rechazo no esta implementada dentro del bot y se simula con edicion manual del CSV por parte de RRHH/supervisor.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:textAnnotation id="Text_GlobalCommands">
+      <bpmn:text>Comandos globales del proyecto: /ayuda muestra la guia. /cancelar aborta la operacion actual y vuelve al menu principal o pide /start si no hay sesion.</bpmn:text>
+    </bpmn:textAnnotation>
+
+    <bpmn:sequenceFlow id="SF_Main_1" sourceRef="Start_App" targetRef="Task_InitCSVs" />
+    <bpmn:sequenceFlow id="SF_Main_2" sourceRef="Task_InitCSVs" targetRef="Task_IngresarToken" />
+    <bpmn:sequenceFlow id="SF_Main_3" sourceRef="Task_IngresarToken" targetRef="Gateway_TokenValido" />
+    <bpmn:sequenceFlow id="SF_Main_4" sourceRef="Gateway_TokenValido" targetRef="End_SinToken" name="No" />
+    <bpmn:sequenceFlow id="SF_Main_5" sourceRef="Gateway_TokenValido" targetRef="Task_CargarUsuarios" name="Si" />
+    <bpmn:sequenceFlow id="SF_Main_6" sourceRef="Task_CargarUsuarios" targetRef="Task_SeleccionarEmpleadoConsola" />
+    <bpmn:sequenceFlow id="SF_Main_7" sourceRef="Task_SeleccionarEmpleadoConsola" targetRef="Gateway_EmpleadoConsolaValido" />
+    <bpmn:sequenceFlow id="SF_Main_8" sourceRef="Gateway_EmpleadoConsolaValido" targetRef="Task_AvisarSeleccionInvalida" name="No" />
+    <bpmn:sequenceFlow id="SF_Main_9" sourceRef="Task_AvisarSeleccionInvalida" targetRef="Task_SeleccionarEmpleadoConsola" />
+    <bpmn:sequenceFlow id="SF_Main_10" sourceRef="Gateway_EmpleadoConsolaValido" targetRef="Task_IniciarBot" name="Si" />
+    <bpmn:sequenceFlow id="SF_Main_11" sourceRef="Task_IniciarBot" targetRef="Task_EnviarStart" />
+    <bpmn:sequenceFlow id="SF_Main_12" sourceRef="Task_EnviarStart" targetRef="SubProcess_SesionMenu" />
+    <bpmn:sequenceFlow id="SF_Main_13" sourceRef="SubProcess_SesionMenu" targetRef="End_AplicacionActiva" />
+
+    <bpmn:association id="Assoc_ManualApproval" sourceRef="Task_GuardarSolicitudPendiente" targetRef="Text_ManualApproval" />
+    <bpmn:association id="Assoc_GlobalCommands" sourceRef="SubProcess_SesionMenu" targetRef="Text_GlobalCommands" />
+  </bpmn:process>
+</bpmn:definitions>

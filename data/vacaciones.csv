@@ -1,0 +1,8 @@
+id,id_empleado,fecha_inicio,fecha_fin,cantidad_dias,estado,fecha_solicitud,observaciones
+1,1,01/07/2026,07/07/2026,5,aprobada,10/06/2026,
+2,1,10/08/2026,12/08/2026,3,pendiente,15/06/2026,
+3,2,06/07/2026,15/07/2026,8,aprobada,01/06/2026,
+4,2,03/08/2026,07/08/2026,5,aprobada,20/06/2026,
+5,3,14/07/2026,18/07/2026,5,aprobada,05/06/2026,
+6,3,25/08/2026,27/08/2026,3,cancelada,08/06/2026,
+7,5,20/07/2026,24/07/2026,5,pendiente,17/06/2026,
