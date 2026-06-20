@@ -6,3 +6,4 @@ id,id_empleado,fecha_inicio,fecha_fin,cantidad_dias,estado,fecha_solicitud,obser
 5,3,14/07/2026,18/07/2026,5,aprobada,05/06/2026,
 6,3,25/08/2026,27/08/2026,3,cancelada,08/06/2026,
 7,5,20/07/2026,24/07/2026,5,pendiente,17/06/2026,
+8,1,15/07/2026,20/07/2026,4,pendiente,19/06/2026,

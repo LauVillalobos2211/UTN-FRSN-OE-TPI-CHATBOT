@@ -1,21 +1,21 @@
-# UTN-FRSN-OE-TPI-CHATBOT
-
 # Bot de Gestión de Vacaciones — Telegram
 
-**TPI | Organización Empresarial | UTN TUP a Distancia**
+**TPI | Organización Empresarial | UTN FRSN — TUP a Distancia**
 
 ---
 
 ## Descripción
 
-Chatbot de Telegram que automatiza el proceso de gestión de vacaciones dentro de una organización. Implementa un CRUD completo con persistencia en archivos CSV y una **Máquina de Estados** que guía al usuario paso a paso por cada operación.
+Chatbot de Telegram que automatiza el proceso de gestión de vacaciones dentro de una organización. Implementa un **CRUD completo** con persistencia en archivos CSV y una **Máquina de Estados** (`ConversationHandler`) que guía al empleado paso a paso por cada operación.
+
+El sistema combina una interfaz de consola (selección de perfil de empleado al iniciar) con la interfaz conversacional de Telegram (botones inline para todas las acciones).
 
 ---
 
 ## Requisitos
 
 - Python **3.10** o superior
-- Acceso a internet (para conectar con la API de Telegram)
+- Acceso a internet (para conectarse a la API de Telegram)
 - Un bot creado con **@BotFather** en Telegram
 
 ---
@@ -24,7 +24,7 @@ Chatbot de Telegram que automatiza el proceso de gestión de vacaciones dentro d
 
 ```bash
 # 1. Clonar o descargar el repositorio
-cd "TPI"
+cd UTN-FRSN-OE-TPI-CHATBOT
 
 # 2. (Recomendado) Crear entorno virtual
 python -m venv venv
@@ -32,7 +32,7 @@ venv\Scripts\activate        # Windows
 # source venv/bin/activate   # Linux/Mac
 
 # 3. Instalar dependencias
-pip install -r requirements.txt
+pip install python-telegram-bot
 ```
 
 ---
@@ -49,10 +49,15 @@ pip install -r requirements.txt
 ## Ejecución
 
 ```bash
-python bot.py
+python main.py
 ```
 
-Al iniciarse, el sistema pedirá el token del bot:
+Al iniciarse, el sistema:
+
+1. Inicializa los archivos CSV si no existen
+2. Pide el token del bot y lo valida contra la API de Telegram
+3. Muestra la lista de empleados en consola para seleccionar el perfil activo
+4. Inicia el bot — abrí Telegram, buscá tu bot y enviá `/start`
 
 ```
 =======================================================
@@ -61,63 +66,106 @@ Al iniciarse, el sistema pedirá el token del bot:
 =======================================================
 
 🔑 Ingresá el TOKEN del bot de Telegram: 123456:ABC-DEF...
-```
+✅ Token válido. Bot detectado: MiBot (@mi_bot)
 
-Luego el bot queda escuchando. Abrí Telegram, buscá tu bot y enviá `/start`.
+👥 Seleccioná tu perfil de empleado:
+  #    Nombre                 Depto            Anuales  Tomados  Programados  Disponibles
+  ──────────────────────────────────────────────────────────────────────────────────────
+  1    Juan Pérez             Sistemas              20        5            3           12
+  ...
+Ingresá el número de empleado: _
+```
 
 ---
 
-## Estructura de Archivos
+## Estructura del Proyecto
 
 ```
-TPI/
-├── bot.py            ← Código fuente principal
-├── requirements.txt  ← Dependencias Python
-├── README.md         ← Este archivo
-├── usuarios.csv      ← Base de datos de empleados
-└── vacaciones.csv    ← Base de datos de solicitudes
+UTN-FRSN-OE-TPI-CHATBOT/
+├── main.py                  ← Punto de entrada: configura y lanza el bot
+├── README.md                ← Este archivo
+├── flujo-chatbot-menu.bpmn  ← Modelo BPMN del flujo del sistema
+│
+├── data/
+│   ├── usuarios.csv         ← Empleados de la organización
+│   ├── vacaciones.csv       ← Solicitudes de vacaciones
+│   └── solicitudes.csv      ← Tabla de relación usuario ↔ vacación
+│
+└── modulos/
+    ├── __init__.py
+    ├── constantes.py        ← Estados del ConversationHandler e íconos
+    ├── persistencia.py      ← Lectura/escritura de CSVs, inicialización
+    ├── negocio.py           ← Lógica de negocio: días hábiles, saldos, IDs
+    ├── sesion.py            ← /start, selección de empleado en Telegram
+    ├── menu.py              ← Distribuidor central del menú principal
+    ├── vacaciones.py        ← Flujo solicitar vacaciones (CREATE)
+    ├── modificar.py         ← Flujo modificar solicitud (UPDATE)
+    ├── cancelar.py          ← Flujo cancelar solicitud (DELETE lógico)
+    ├── consultas.py         ← Ver solicitudes y días disponibles (READ/QUERY)
+    ├── globales.py          ← Comandos globales: /cancelar, /ayuda, /help
+    └── teclados.py          ← Teclados inline reutilizables (menú, confirmar, volver)
 ```
 
 ---
 
 ## Diccionario de Datos
 
-### `usuarios.csv`
+### `data/usuarios.csv`
 
-| Campo         | Tipo   | Descripción                              |
-|---------------|--------|------------------------------------------|
-| id            | entero | Identificador único del empleado         |
-| nombre        | texto  | Nombre del empleado                      |
-| apellido      | texto  | Apellido del empleado                    |
-| dni           | texto  | DNI del empleado                         |
-| departamento  | texto  | Área o sector dentro de la empresa       |
-| dias_anuales  | entero | Total de días de vacaciones por año      |
+Contiene los perfiles de los empleados de la organización. Estos datos son de solo lectura para el bot; se cargan al iniciar y se usan para calcular saldos.
 
-### `vacaciones.csv`
+| Campo          | Tipo    | Descripción                                        |
+|----------------|---------|----------------------------------------------------|
+| `id`           | entero  | Identificador único del empleado (PK)              |
+| `nombre`       | texto   | Nombre del empleado                                |
+| `apellido`     | texto   | Apellido del empleado                              |
+| `dni`          | texto   | DNI del empleado                                   |
+| `departamento` | texto   | Área o sector dentro de la empresa                 |
+| `dias_anuales` | entero  | Total de días de vacaciones asignados por año      |
 
-| Campo           | Tipo   | Descripción                                            |
-|-----------------|--------|--------------------------------------------------------|
-| id              | entero | Identificador único de la solicitud                    |
-| id_empleado     | entero | FK → `usuarios.id`                                    |
-| fecha_inicio    | fecha  | Primer día de vacaciones (DD/MM/AAAA)                  |
-| fecha_fin       | fecha  | Último día de vacaciones (DD/MM/AAAA)                  |
-| cantidad_dias   | entero | Días hábiles (lun–vie) del período                     |
-| estado          | texto  | `pendiente` / `aprobada` / `rechazada` / `cancelada`   |
-| fecha_solicitud | fecha  | Fecha en que se registró o modificó la solicitud       |
-| observaciones   | texto  | Notas adicionales (ej. motivo de cancelación)          |
+---
+
+### `data/vacaciones.csv`
+
+Contiene el registro de todas las solicitudes de vacaciones. Es el archivo principal de escritura del sistema.
+
+| Campo             | Tipo    | Descripción                                                            |
+|-------------------|---------|------------------------------------------------------------------------|
+| `id`              | entero  | Identificador único de la solicitud (PK)                               |
+| `id_empleado`     | entero  | FK → `usuarios.id`                                                     |
+| `fecha_inicio`    | fecha   | Primer día de vacaciones (formato DD/MM/AAAA)                          |
+| `fecha_fin`       | fecha   | Último día de vacaciones (formato DD/MM/AAAA)                          |
+| `cantidad_dias`   | entero  | Cantidad de días hábiles (lunes a viernes) comprendidos en el período  |
+| `estado`          | texto   | Estado de la solicitud: `pendiente` / `aprobada` / `rechazada` / `cancelada` |
+| `fecha_solicitud` | fecha   | Fecha en que se registró o modificó la solicitud (DD/MM/AAAA)         |
+| `observaciones`   | texto   | Notas adicionales opcionales (ej. motivo de cancelación)               |
+
+> **Nota:** Los estados `aprobada` y `rechazada` se asignan manualmente en el CSV, simulando la acción de un supervisor de RRHH.
+
+---
+
+### `data/solicitudes.csv`
+
+Tabla de relación entre empleados y sus solicitudes de vacaciones. Actúa como tabla intermedia (muchos a muchos entre `usuarios` y `vacaciones`).
+
+| Campo          | Tipo    | Descripción                                  |
+|----------------|---------|----------------------------------------------|
+| `id_solicitud` | entero  | Identificador único del registro (PK)        |
+| `id_usuario`   | entero  | FK → `usuarios.id`                           |
+| `id_vacacion`  | entero  | FK → `vacaciones.id`                         |
 
 ---
 
 ## Funcionalidades
 
-| Opción de Menú          | Operación | Descripción                                              |
-|-------------------------|-----------|----------------------------------------------------------|
-| 📅 Solicitar Vacaciones  | CREATE    | Registra una nueva solicitud con fechas validadas        |
-| 📋 Ver Solicitudes       | READ      | Lista todas las solicitudes del empleado con su estado   |
-| ✏️ Modificar Solicitud   | UPDATE    | Cambia fechas de una solicitud en estado PENDIENTE       |
-| ❌ Cancelar Solicitud    | DELETE    | Cancela una solicitud activa (pendiente o aprobada)      |
-| 💼 Días Disponibles      | QUERY     | Muestra el saldo de días anuales disponibles             |
-| 🚪 Salir                 | —         | Cierra la sesión del empleado                            |
+| Opción de Menú           | Operación | Descripción                                                        |
+|--------------------------|-----------|--------------------------------------------------------------------|
+| 📅 Solicitar Vacaciones   | CREATE    | Registra una nueva solicitud con validación completa de fechas     |
+| 📋 Ver Solicitudes        | READ      | Lista todas las solicitudes del empleado con estado e íconos       |
+| ✏️ Modificar Solicitud    | UPDATE    | Cambia las fechas de una solicitud en estado `pendiente`           |
+| ❌ Cancelar Solicitud     | DELETE    | Cancela (lógicamente) una solicitud activa (`pendiente`/`aprobada`)|
+| 💼 Días Disponibles       | QUERY     | Muestra el saldo: anuales − aprobados − pendientes                 |
+| 🚪 Salir                  | —         | Cierra la sesión del empleado y limpia el contexto                 |
 
 ---
 
@@ -126,7 +174,7 @@ TPI/
 ```
 /start
   └─► SELECTING_USER
-        └─► [selección válida] ──► MAIN_MENU
+        ├─► [selección válida] ──► MAIN_MENU
         └─► [inválida] ──────────► SELECTING_USER (re-muestra lista)
 
 MAIN_MENU
@@ -134,7 +182,7 @@ MAIN_MENU
   │       └─► VAC_END_DATE
   │               └─► VAC_CONFIRM ──► MAIN_MENU
   │
-  ├─► "Ver Solicitudes" ────────► MAIN_MENU (muestra lista)
+  ├─► "Ver Solicitudes" ────────► MAIN_MENU (muestra lista y vuelve)
   │
   ├─► "Modificar Solicitud" ───► MODIFY_SELECT
   │       └─► MODIFY_START
@@ -144,54 +192,60 @@ MAIN_MENU
   ├─► "Cancelar Solicitud" ────► CANCEL_SELECT
   │       └─► CANCEL_CONFIRM ──► MAIN_MENU
   │
-  ├─► "Días Disponibles" ───────► MAIN_MENU (muestra saldo)
+  ├─► "Días Disponibles" ───────► MAIN_MENU (muestra saldo y vuelve)
   └─► "Salir" ──────────────────► END
 
-En cualquier estado: /cancelar ──► MAIN_MENU (o END si no hay sesión)
+En cualquier estado:
+  /cancelar ──► MAIN_MENU  (si hay sesión activa)
+             └► END        (si no hay sesión)
 ```
 
 ---
 
 ## Comandos de Telegram
 
-| Comando    | Descripción                              |
-|------------|------------------------------------------|
-| `/start`   | Iniciar o reiniciar sesión               |
-| `/cancelar`| Cancelar la operación en curso           |
-| `/ayuda`   | Mostrar ayuda con todos los comandos     |
-| `/help`    | Alias de `/ayuda`                        |
+| Comando     | Descripción                                       |
+|-------------|---------------------------------------------------|
+| `/start`    | Iniciar sesión o reiniciar si ya estaba activa    |
+| `/cancelar` | Cancelar la operación en curso y volver al menú   |
+| `/ayuda`    | Mostrar ayuda con todos los comandos disponibles  |
+| `/help`     | Alias de `/ayuda`                                 |
 
 ---
 
 ## Validaciones implementadas (Camino Infeliz)
 
-| Situación                              | Respuesta del bot                                      |
-|----------------------------------------|--------------------------------------------------------|
-| Empleado no seleccionado de la lista   | Muestra la lista nuevamente con aviso                  |
-| Fecha con formato incorrecto           | Solicita reingreso indicando el formato correcto       |
-| Fecha de inicio en el pasado           | Informa y pide una fecha futura                        |
-| Fecha de fin anterior al inicio        | Informa inconsistencia y pide corrección               |
-| Rango sin días hábiles                 | Avisa que no hay días hábiles e invita a corregir      |
-| Días solicitados > días disponibles    | Muestra el saldo y pide reducir el período             |
-| Respuesta libre en confirmación        | Pide usar los botones Sí/No                            |
-| Opción inválida en el menú             | Avisa y re-muestra el menú                             |
-| Sesión expirada (sin empleado)         | Indica escribir `/start`                               |
-| Sin solicitudes para modificar         | Informa que solo se pueden editar pendientes           |
-| Sin solicitudes activas para cancelar  | Informa que no hay nada para cancelar                  |
+| Situación                               | Respuesta del bot                                       |
+|-----------------------------------------|---------------------------------------------------------|
+| Empleado no seleccionado de la lista    | Muestra la lista nuevamente con aviso                   |
+| Fecha con formato incorrecto            | Solicita reingreso indicando el formato correcto        |
+| Fecha de inicio en el pasado            | Informa y pide una fecha igual o posterior a hoy        |
+| Fecha de fin anterior al inicio         | Informa inconsistencia y pide corrección                |
+| Rango sin días hábiles (ej. fin de semana) | Avisa que no hay días hábiles e invita a corregir    |
+| Días solicitados > días disponibles     | Muestra el saldo disponible y pide reducir el período   |
+| Respuesta libre donde se esperan botones| Pide usar los botones Sí/No o del menú                  |
+| Opción inválida en el menú              | Avisa y re-muestra el menú                              |
+| Sesión expirada (sin empleado en contexto) | Indica escribir `/start`                             |
+| Sin solicitudes pendientes para modificar | Informa que solo se pueden editar solicitudes pendientes|
+| Sin solicitudes activas para cancelar   | Informa que no hay solicitudes activas para cancelar    |
 
 ---
 
 ## Tecnologías utilizadas
 
-- **Python 3.10+** — lenguaje de desarrollo
-- **python-telegram-bot 20.x** — librería asincrónica para la API de Telegram
-- **CSV** — persistencia de datos (simulación de base de datos)
-- **datetime** — manejo y validación de fechas, cálculo de días hábiles
+| Tecnología                  | Versión   | Uso                                                        |
+|-----------------------------|-----------|-------------------------------------------------------------|
+| **Python**                  | 3.10+     | Lenguaje de desarrollo, async/await nativo                  |
+| **python-telegram-bot**     | 20.x      | Framework asincrónico para la API de Telegram (PTB v20)     |
+| **CSV** (stdlib)            | —         | Persistencia de datos (simulación de base de datos)         |
+| **datetime** (stdlib)       | —         | Manejo y validación de fechas, cálculo de días hábiles      |
+| **asyncio** (stdlib)        | —         | Validación del token en el inicio (llamada async en `main`) |
 
 ---
 
 ## Notas para la presentación
 
-- Los **estados aprobada/rechazada** son asignados manualmente en el CSV para simular la acción de un supervisor. En un sistema real, un panel de RRHH cambiaría el estado.  
-- El cálculo de **días hábiles** excluye sábados y domingos (no incluye feriados, que podrían agregarse en una versión extendida).  
-- El bot tiene **persistencia por conversación**: usa `context.user_data` para mantener el estado de cada usuario de Telegram de forma independiente.
+- Los **estados `aprobada`/`rechazada`** se asignan manualmente en `data/vacaciones.csv` para simular la aprobación por parte de un supervisor de RRHH. En un sistema real, existiría un panel web o un bot secundario para RRHH.
+- El cálculo de **días hábiles** excluye sábados y domingos. No incluye feriados nacionales (extensión posible en versiones futuras).
+- El bot usa **`context.user_data`** para mantener el estado de cada conversación de Telegram de forma independiente.
+- Los archivos CSV se **auto-inicializan** al primer inicio con 5 empleados de ejemplo y 7 solicitudes de muestra en distintos estados.
